@@ -101,8 +101,8 @@ MyModel_DeclQuants (void *MP)
 			mp->halfWidth = 0.5;
 		}
 		mp->K_U = 1;
-		mp->K_P = 10;
-		mp->K_I = 25;
+		mp->K_P = 100;
+		mp->K_I = 100;
 		mp->yawErrorI = 0;
 		mp->prevTime = 0;
 		MyModel_DeclQuants_dyn (mp, 0);
@@ -308,17 +308,19 @@ MyModel_Calc (void *MP, tPTControlIF *IF, double dt)
 			goto OutOfOperState;
 	    }
 
+		// Checking if Torque Vectoring should be turned on
 		if(IF->UserSignal[4]) {
 
+			double yaw_ref = mp->longVel/(mp->wheelBase*(1+mp->K_U*mp->longVel*mp->longVel))*mp->steerAngle;
+			double yawError = yaw_ref- mp->yawRate;
+			mp->yawErrorI += (yawError)*DeltaT;
 			if(SimCore.TimeWC-mp->prevTime > 1) {
-				Log("YawError: %f\n",mp->yawErrorI);
+				Log("YawError: %f\n",yawError);
+				Log("YawErrorI: %f\n",mp->yawErrorI);
 				mp->prevTime = SimCore.TimeWC;
 			}
 
-			double yaw_ref = mp->longVel/(mp->wheelBase*(1+mp->K_U*mp->longVel*mp->longVel))*mp->steerAngle;
-			mp->yawErrorI += (yaw_ref- mp->yawRate)*DeltaT;
-
-			double yaw_Moment = mp->K_P*(yaw_ref- mp->yawRate)+mp->K_I*mp->yawErrorI;
+			double yaw_Moment = mp->K_P*(yawError)+mp->K_I*mp->yawErrorI;
 			double correctionTorqueF = yaw_Moment*mp->wheelRadius/4.0/mp->halfWidth;
 			/* Gas */
 			IF->MotorOut[0].Trq_trg = IF->Gas*IF->MotorIn[0].TrqMot_max;

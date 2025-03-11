@@ -208,7 +208,7 @@ User_Init (void)
 }
 
 
-
+// Register Plug-in models
 int
 User_Register (void)
 {
@@ -608,7 +608,7 @@ User_Calc (double dt)
        state. Uncomment the following line in order to restore the behaviour
        of CM 5.1 and earlier. */
     /*if (!UserCalcCalledByAppTestRunCalc) return 0;*/
-    double currSpeed = Car.Con.vHori;
+    // double currSpeed = Car.Con.vHori;
 
     return 0;
 }
