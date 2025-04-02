@@ -33,7 +33,7 @@ static const int  ThisVersionId    = 1;
 
 
 struct tMyModel {
-    double steerAngle ;
+    double steerAngle;
 	double longVel;
 	double yawRate;
 	double wheelBase;
@@ -314,18 +314,21 @@ MyModel_Calc (void *MP, tPTControlIF *IF, double dt)
 			double yaw_ref = mp->longVel/(mp->wheelBase*(1+mp->K_U*mp->longVel*mp->longVel))*mp->steerAngle;
 			double yawError = yaw_ref- mp->yawRate;
 			mp->yawErrorI += (yawError)*DeltaT;
-			if(SimCore.TimeWC-mp->prevTime > 1) {
-				Log("YawError: %f\n",yawError);
-				Log("YawErrorI: %f\n",mp->yawErrorI);
-				mp->prevTime = SimCore.TimeWC;
-			}
+			
 
 			double yaw_Moment = mp->K_P*(yawError)+mp->K_I*mp->yawErrorI;
 			double correctionTorqueF = yaw_Moment*mp->wheelRadius/4.0/mp->halfWidth;
 			/* Gas */
+			double targetTorque = IF->Gas*IF->MotorIn[1].TrqMot_max;
 			IF->MotorOut[0].Trq_trg = IF->Gas*IF->MotorIn[0].TrqMot_max;
 			IF->MotorOut[1].Trq_trg = IF->Gas*IF->MotorIn[1].TrqMot_max/2.0-correctionTorqueF;
 			IF->MotorOut[2].Trq_trg = IF->Gas*IF->MotorIn[2].TrqMot_max/2.0+correctionTorqueF;
+			if(SimCore.TimeWC-mp->prevTime > 1) {
+				Log("YawError: %f\n",yawError);
+				Log("YawErrorI: %f\n",mp->yawErrorI);
+				Log("Motor 1: %f \nMotor 2: %f \n", targetTorque - correctionTorqueF, targetTorque + correctionTorqueF);
+				mp->prevTime = SimCore.TimeWC;
+			}
 		}
 		else {
 			mp->yawErrorI = 0;
