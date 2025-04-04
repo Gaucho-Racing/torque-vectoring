@@ -96,6 +96,8 @@
 
 
 int UserCalcCalledByAppTestRunCalc = 0;
+double maxSpeed;
+tDDictEntry *maxSpeedP;
 
 
 tUser	User;
@@ -241,6 +243,15 @@ User_DeclQuants (void)
 	sprintf (sbuf, "UserOut_%02d", i);
 	DDefDouble (NULL, sbuf, "", &User.Out[i], DVA_IO_Out);
     }
+    DDefDouble(NULL, "MaxSpeed", "mph", &maxSpeed, DVA_Private);
+
+    maxSpeedP = DDictGetEntry("MaxSpeed");
+    if(maxSpeedP == NULL) {
+        LogErrF(EC_General, "MaxSpeed Access Point failed");
+    }
+
+    maxSpeed = DVA_HandlePrivateWrite(maxSpeedP,0);
+    
     // float temp;
     // DDefDouble(NULL,"Car.Con.alHori","m/s2",&temp,DVA_None);
 }
@@ -608,7 +619,6 @@ User_Calc (double dt)
        state. Uncomment the following line in order to restore the behaviour
        of CM 5.1 and earlier. */
     /*if (!UserCalcCalledByAppTestRunCalc) return 0;*/
-    // double currSpeed = Car.Con.vHori;
 
     return 0;
 }
@@ -676,6 +686,15 @@ User_Out (const unsigned CycleNo)
 #if defined(XENO)
     IOConf_OutMap();
 #endif
+
+   
+    double currSpeed = Car.ConBdy1.vHori*2.237;
+    // double maxSpeed =  maxSpeedP->GetFunc(maxSpeedP->Var);
+
+
+    if(currSpeed > maxSpeed) {
+        maxSpeed =  DVA_HandlePrivateWrite(maxSpeedP, currSpeed);
+    }
 
     if (SimCore.State != SCState_Simulate)
 	return;

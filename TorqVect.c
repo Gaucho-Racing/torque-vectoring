@@ -101,8 +101,8 @@ MyModel_DeclQuants (void *MP)
 			mp->halfWidth = 0.5;
 		}
 		mp->K_U = 1;
-		mp->K_P = 100;
-		mp->K_I = 100;
+		mp->K_P = 1000;
+		mp->K_I = 10;
 		mp->yawErrorI = 0;
 		mp->prevTime = 0;
 		MyModel_DeclQuants_dyn (mp, 0);
@@ -138,7 +138,7 @@ MyModel_New (struct tInfos  	    *Inf,
     sprintf (MsgPre, "%s %s", ThisModelClass, ThisModelKind);
 
     if (CfgIF->PTKind != PTKind_BEV) {
-	LogErrF (EC_Init, "%s: supports only Elecrtric powertrain", MsgPre);
+	LogErrF (EC_Init, "%s: supports only Electric powertrain", MsgPre);
 	return NULL;
     }
 
@@ -277,7 +277,7 @@ MyModel_Calc (void *MP, tPTControlIF *IF, double dt)
 			}
 			IF->Ignition = 1;
 			IF->MotorOut[0].Trq_trg = IF->MotorIn[0].TrqMot_max;
-			IF->MotorOut[1].Trq_trg = IF->MotorIn[1].TrqMot_max/2;
+			IF->MotorOut[1].Trq_trg = IF->MotorIn[1].TrqMot_max;
 			IF->MotorOut[2].Trq_trg = IF->MotorIn[2].TrqMot_max/2;
 			IF->OperationState = OperState_Driving;
 		goto OutOfOperState;
@@ -320,9 +320,9 @@ MyModel_Calc (void *MP, tPTControlIF *IF, double dt)
 			double correctionTorqueF = yaw_Moment*mp->wheelRadius/4.0/mp->halfWidth;
 			/* Gas */
 			double targetTorque = IF->Gas*IF->MotorIn[1].TrqMot_max;
-			IF->MotorOut[0].Trq_trg = IF->Gas*IF->MotorIn[0].TrqMot_max;
-			IF->MotorOut[1].Trq_trg = IF->Gas*IF->MotorIn[1].TrqMot_max/2.0-correctionTorqueF;
-			IF->MotorOut[2].Trq_trg = IF->Gas*IF->MotorIn[2].TrqMot_max/2.0+correctionTorqueF;
+			IF->MotorOut[0].Trq_trg = IF->Gas*IF->MotorIn[0].TrqMot_max-correctionTorqueF;
+			IF->MotorOut[1].Trq_trg = IF->Gas*IF->MotorIn[1].TrqMot_max+correctionTorqueF;
+			IF->MotorOut[2].Trq_trg = IF->Gas*IF->MotorIn[2].TrqMot_max/2.0;
 			if(SimCore.TimeWC-mp->prevTime > 1) {
 				Log("YawError: %f\n",yawError);
 				Log("YawErrorI: %f\n",mp->yawErrorI);
