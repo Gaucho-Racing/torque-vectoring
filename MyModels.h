@@ -77,4 +77,26 @@ int UserDriver_Register_MyModel			(void);
 }
 #endif
 
+
+
+struct TorqueRequest {
+    double FR;
+    double FL;
+    double R;
+};
+
+struct MagicFormula {
+    double B;
+    double C;
+    double D;
+    double E;
+};
+
+struct TorqueConstants {
+    struct MagicFormula formula;
+    double wheelBase;
+};
+
+struct TorqueRequest Torque_Vector_Algorithm(double longVel, double steerAngle, struct TorqueConstants *constants);
+
 #endif	/* #ifndef _MYMODELS_H__ */

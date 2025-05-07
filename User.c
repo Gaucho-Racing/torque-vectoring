@@ -97,8 +97,9 @@
 
 int UserCalcCalledByAppTestRunCalc = 0;
 double maxSpeed;
+// double K_U;
 tDDictEntry *maxSpeedP;
-
+// tDDictEntry *pK_U;
 
 tUser	User;
 
@@ -244,13 +245,22 @@ User_DeclQuants (void)
 	DDefDouble (NULL, sbuf, "", &User.Out[i], DVA_IO_Out);
     }
     DDefDouble(NULL, "MaxSpeed", "mph", &maxSpeed, DVA_Private);
+    // DDefDouble(NULL, "Understeer Gradient", "", &K_U, DVA_Private);
+
 
     maxSpeedP = DDictGetEntry("MaxSpeed");
+    // pK_U = DDictGetEntry("Understeer Gradient");
     if(maxSpeedP == NULL) {
         LogErrF(EC_General, "MaxSpeed Access Point failed");
     }
 
+    // pK_U = DDictGetEntry("Understeer Gradient");
+    // if(pK_U == NULL) {
+    //     LogErrF(EC_General, "Understeer Gradient Access Point Failled");
+    // }
+
     maxSpeed = DVA_HandlePrivateWrite(maxSpeedP,0);
+    // K_U = DVA_HandlePrivateWrite(pK_U,0.3);
     
     // float temp;
     // DDefDouble(NULL,"Car.Con.alHori","m/s2",&temp,DVA_None);
@@ -362,6 +372,8 @@ User_TestRun_Start_atBegin (void)
     for (i=0; i<N_USEROUTPUT; i++)
 	User.Out[i] = 0.0;
 
+
+    maxSpeed = DVA_HandlePrivateWrite(maxSpeedP,0);
 
     if (IO_None)
 	return rv;

@@ -45,6 +45,10 @@ struct tMyModel {
 	double K_I;
 	double yawErrorI;
 	double prevTime;
+	double FL_Ratio;
+	double FR_Ratio;
+	double R_Ratio;
+	tDDictEntry * pK_U; 
 };
 
 
@@ -100,9 +104,15 @@ MyModel_DeclQuants (void *MP)
 		else {
 			mp->halfWidth = 0.5;
 		}
-		mp->K_U = 1;
-		mp->K_P = 1000;
-		mp->K_I = 10;
+		// tDDictEntry* pK_U = DDictGetEntry("Understeer Gradient");
+		// if(pK_U == NULL) {
+		// 	LogErrF(EC_General, "Understeer Gradient Access Point Failled");
+		// }
+		// mp->pK_U = pK_U;
+		mp->K_U = 0.025;
+		Log("Understeer Gradient:%f\n",mp->K_U);
+		mp->K_P =95;
+		mp->K_I = 1;
 		mp->yawErrorI = 0;
 		mp->prevTime = 0;
 		MyModel_DeclQuants_dyn (mp, 0);
@@ -141,6 +151,8 @@ MyModel_New (struct tInfos  	    *Inf,
 	LogErrF (EC_Init, "%s: supports only Electric powertrain", MsgPre);
 	return NULL;
     }
+	
+	// LogErrF (EC_Init, "%s: supports only Electric powertrain", MsgPre);
 
 	if (CfgIF->nMotor != 3) {
 		LogErrF(EC_Init, "supports only 3 motors, %d motors",CfgIF->nMotor);
@@ -153,8 +165,9 @@ MyModel_New (struct tInfos  	    *Inf,
 
     mp = (struct tMyModel*)calloc(1,sizeof(*mp));
 	mp->wheelRadius = CfgIF->WheelRadius;
-	
-
+	mp->FL_Ratio = CfgIF->Motor[0].Ratio;
+	mp->FR_Ratio = CfgIF->Motor[1].Ratio;
+	mp->R_Ratio = 3.4;
 
     /* get CfgIF parameters */
     if (PTControl_GetCfgOutIF (Inf, CfgIF, ModelKind) != 0)
@@ -278,7 +291,9 @@ MyModel_Calc (void *MP, tPTControlIF *IF, double dt)
 			IF->Ignition = 1;
 			IF->MotorOut[0].Trq_trg = IF->MotorIn[0].TrqMot_max;
 			IF->MotorOut[1].Trq_trg = IF->MotorIn[1].TrqMot_max;
-			IF->MotorOut[2].Trq_trg = IF->MotorIn[2].TrqMot_max/2;
+			IF->MotorOut[2].Trq_trg = IF->MotorIn[2].TrqMot_max;
+			// mp->K_U = mp->pK_U->GetFunc(mp->pK_U->Var);
+			Log("Understeer Gradient: %f\n",mp->K_U);
 			IF->OperationState = OperState_Driving;
 		goto OutOfOperState;
 	    } 
@@ -309,32 +324,38 @@ MyModel_Calc (void *MP, tPTControlIF *IF, double dt)
 	    }
 
 		// Checking if Torque Vectoring should be turned on
-		if(IF->UserSignal[4]) {
-
+		if(/*IF->UserSignal[4]*/1) {
+			
+			
+			// mp->K_U = mp->pK_U->GetFunc(mp->pK_U->Var);
+			
 			double yaw_ref = mp->longVel/(mp->wheelBase*(1+mp->K_U*mp->longVel*mp->longVel))*mp->steerAngle;
 			double yawError = yaw_ref- mp->yawRate;
 			mp->yawErrorI += (yawError)*DeltaT;
 			
 
-			double yaw_Moment = mp->K_P*(yawError)+mp->K_I*mp->yawErrorI;
-			double correctionTorqueF = yaw_Moment*mp->wheelRadius/4.0/mp->halfWidth;
+			// double yaw_Moment = mp->K_P*(yawError)+mp->K_I*mp->yawErrorI;
+			double yaw_Moment = mp->K_P*yawError;
+			double correctionTorqueF = yaw_Moment*mp->wheelRadius/2.0/mp->halfWidth;
 			/* Gas */
-			double targetTorque = IF->Gas*IF->MotorIn[1].TrqMot_max;
+			double targetTorque = IF->Gas*IF->MotorIn[0].TrqMot_max;
 			IF->MotorOut[0].Trq_trg = IF->Gas*IF->MotorIn[0].TrqMot_max-correctionTorqueF;
 			IF->MotorOut[1].Trq_trg = IF->Gas*IF->MotorIn[1].TrqMot_max+correctionTorqueF;
-			IF->MotorOut[2].Trq_trg = IF->Gas*IF->MotorIn[2].TrqMot_max/2.0;
+			
+			IF->MotorOut[2].Trq_trg = targetTorque*mp->FL_Ratio/mp->R_Ratio*2;
 			if(SimCore.TimeWC-mp->prevTime > 1) {
 				Log("YawError: %f\n",yawError);
 				Log("YawErrorI: %f\n",mp->yawErrorI);
-				Log("Motor 1: %f \nMotor 2: %f \n", targetTorque - correctionTorqueF, targetTorque + correctionTorqueF);
+				// Log("Understeer: %f\n",mp->K_U);
 				mp->prevTime = SimCore.TimeWC;
 			}
 		}
 		else {
 			mp->yawErrorI = 0;
-			IF->MotorOut[0].Trq_trg = IF->Gas*IF->MotorIn[0].TrqMot_max;
-			IF->MotorOut[1].Trq_trg = IF->Gas*IF->MotorIn[1].TrqMot_max/2.0;
-			IF->MotorOut[2].Trq_trg = IF->Gas*IF->MotorIn[2].TrqMot_max/2.0;	
+			double targetTorque = IF->Gas*IF->MotorIn[0].TrqMot_max;
+			IF->MotorOut[0].Trq_trg = targetTorque;
+			IF->MotorOut[1].Trq_trg = targetTorque;
+			IF->MotorOut[2].Trq_trg = targetTorque*mp->FL_Ratio/mp->R_Ratio*2;	
 		}
 	   
 	    break;
