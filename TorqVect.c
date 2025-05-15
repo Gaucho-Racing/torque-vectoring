@@ -49,6 +49,7 @@ struct tMyModel {
 	double FR_Ratio;
 	double R_Ratio;
 	tDDictEntry * pK_U; 
+	double T_max;
 };
 
 
@@ -111,7 +112,7 @@ MyModel_DeclQuants (void *MP)
 		// mp->pK_U = pK_U;
 		mp->K_U = 0.025;
 		Log("Understeer Gradient:%f\n",mp->K_U);
-		mp->K_P =95;
+		mp->K_P =50;
 		mp->K_I = 1;
 		mp->yawErrorI = 0;
 		mp->prevTime = 0;
@@ -165,8 +166,8 @@ MyModel_New (struct tInfos  	    *Inf,
 
     mp = (struct tMyModel*)calloc(1,sizeof(*mp));
 	mp->wheelRadius = CfgIF->WheelRadius;
-	mp->FL_Ratio = CfgIF->Motor[0].Ratio;
-	mp->FR_Ratio = CfgIF->Motor[1].Ratio;
+	mp->FL_Ratio = CfgIF->Motor[1].Ratio;
+	mp->FR_Ratio = CfgIF->Motor[2].Ratio;
 	mp->R_Ratio = 3.4;
 
     /* get CfgIF parameters */
@@ -293,7 +294,7 @@ MyModel_Calc (void *MP, tPTControlIF *IF, double dt)
 			IF->MotorOut[1].Trq_trg = IF->MotorIn[1].TrqMot_max;
 			IF->MotorOut[2].Trq_trg = IF->MotorIn[2].TrqMot_max;
 			// mp->K_U = mp->pK_U->GetFunc(mp->pK_U->Var);
-			Log("Understeer Gradient: %f\n",mp->K_U);
+			// Log("Understeer Gradient: %f\n",mp->K_U);
 			IF->OperationState = OperState_Driving;
 		goto OutOfOperState;
 	    } 
@@ -324,7 +325,7 @@ MyModel_Calc (void *MP, tPTControlIF *IF, double dt)
 	    }
 
 		// Checking if Torque Vectoring should be turned on
-		if(/*IF->UserSignal[4]*/1) {
+		if(IF->UserSignal[4]) {
 			
 			
 			// mp->K_U = mp->pK_U->GetFunc(mp->pK_U->Var);
@@ -337,12 +338,27 @@ MyModel_Calc (void *MP, tPTControlIF *IF, double dt)
 			// double yaw_Moment = mp->K_P*(yawError)+mp->K_I*mp->yawErrorI;
 			double yaw_Moment = mp->K_P*yawError;
 			double correctionTorqueF = yaw_Moment*mp->wheelRadius/2.0/mp->halfWidth;
-			/* Gas */
-			double targetTorque = IF->Gas*IF->MotorIn[0].TrqMot_max;
-			IF->MotorOut[0].Trq_trg = IF->Gas*IF->MotorIn[0].TrqMot_max-correctionTorqueF;
-			IF->MotorOut[1].Trq_trg = IF->Gas*IF->MotorIn[1].TrqMot_max+correctionTorqueF;
+			double totalTorque = 0;
+			// if(SimCore.TimeWC-mp->prevTime > 1) Log("Front Left Torque:%f",IF->MotorIn[0].TrqMot_max);
+			// if(SimCore.TimeWC-mp->prevTime > 1) Log("Back Torque:%f",mp->FL_Ratio);
+			if(IF->UserSignal[3]) {
+				double rearForce = Vehicle.RL.Fz+Vehicle.RR.Fz;
+				double normalForce = Vehicle.FR.Fz+Vehicle.FL.Fz+Vehicle.FL.Fz + rearForce;
+				totalTorque += (IF->MotorIn[1].TrqMot_max+IF->MotorIn[2].TrqMot_max);
+				totalTorque += IF->MotorIn[0].TrqMot_max*mp->R_Ratio;
+				totalTorque *= (IF->Gas-IF->Brake);
+				IF->MotorOut[1].Trq_trg = Vehicle.FL.Fz/normalForce * (totalTorque-correctionTorqueF);
+				IF->MotorOut[2].Trq_trg = Vehicle.FR.Fz/normalForce * (totalTorque+correctionTorqueF);
+				IF->MotorOut[0].Trq_trg = rearForce /normalForce * totalTorque;
+			}
+			else {
+				totalTorque = IF->Gas*IF->MotorIn[1].TrqMot_max;
+				IF->MotorOut[1].Trq_trg = IF->MotorIn[1].TrqMot_max-correctionTorqueF;
+				IF->MotorOut[2].Trq_trg = IF->MotorIn[2].TrqMot_max-correctionTorqueF;
+				IF->MotorOut[0].Trq_trg = totalTorque*mp->FL_Ratio/mp->R_Ratio*2;
+			}
 			
-			IF->MotorOut[2].Trq_trg = targetTorque*mp->FL_Ratio/mp->R_Ratio*2;
+			
 			if(SimCore.TimeWC-mp->prevTime > 1) {
 				Log("YawError: %f\n",yawError);
 				Log("YawErrorI: %f\n",mp->yawErrorI);
@@ -352,10 +368,10 @@ MyModel_Calc (void *MP, tPTControlIF *IF, double dt)
 		}
 		else {
 			mp->yawErrorI = 0;
-			double targetTorque = IF->Gas*IF->MotorIn[0].TrqMot_max;
-			IF->MotorOut[0].Trq_trg = targetTorque;
+			double targetTorque = IF->Gas*IF->MotorIn[1].TrqMot_max;
+			IF->MotorOut[2].Trq_trg = targetTorque;
 			IF->MotorOut[1].Trq_trg = targetTorque;
-			IF->MotorOut[2].Trq_trg = targetTorque*mp->FL_Ratio/mp->R_Ratio*2;	
+			IF->MotorOut[0].Trq_trg = targetTorque*mp->FL_Ratio/mp->R_Ratio*2;	
 		}
 	   
 	    break;
