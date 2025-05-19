@@ -16,7 +16,7 @@ double c; // const term
 double dBarrier[4]; // barrier gradient 
 const double t = 8;
 // convention: 0 -> FL,1 -> FR, 2 -> RL, 3 -> RR
-// convex surface can be represented as u^TAu+Bu+c, c can be ignored
+// convex surface can be represented as u^TAu+2Bu+c, c can be ignored
 // barrier terms allow the solution to remain in the allowable region
 
 // Initialize
@@ -92,7 +92,8 @@ void dbarrierCalc(double * u , double * torqueLimit){
 void dJCalc(double * torque,double * limits) {
     dbarrierCalc(torque,limits);
     for(int i = 0; i < 4; i++) {
-        dJ[i] = 2*(A[i][0]*torque[i]+A[i][1]*torque[1]+A[i][2]*torque[2]+A[i][3]*torque[3]- B[i]) + dBarrier[i]/t;
+        dJ[i] = 2*(A[i][0]*torque[0]+A[i][1]*torque[1]+A[i][2]*torque[2]+A[i][3]*torque[3]- B[i]) + dBarrier[i]/t;
+        // dJ[i] = 2*(dotProduct(A[i],torque,4)-B[i])+dBarrier[i]/t;
     }
     return;
 }
@@ -117,19 +118,20 @@ int main() {
     // Get the starting time
     QueryPerformanceCounter(&start);
     double normal[4] = {350/4,350/4,350/4,350/4};
-    initialize(3.14/12,normal);
-    constCalc(847,0.05);
+    double steering_angle = 3.14/12;
+    initialize(steering_angle,normal);
+    double total_torque = 647;
+    constCalc(total_torque,3);
   
     double torqueLimits[] = {15*13.5,15*13.5,130*3.4};
-    double torque[4] = {847/4,847/4,847/4,847/4};
-    double rate = 0.0000001;
+    double torque[4] = {total_torque/4,total_torque/4,total_torque/4,total_torque/4};
+    double torque_initial[4]= {total_torque/4,total_torque/4,total_torque/4,total_torque/4}; 
+    double rate = 0.00000001;
     int r = 0;
     dJCalc(torque,torqueLimits);
-    printf("Cost: %f\n",JCalc(torque));
     // printf("Magn: %f\n",dotProduct(dJ,dJ,4));
     // printf("dJ: %f,%f,%f,%f\n",dJ[0],dJ[1],dJ[2],dJ[3]);
-   
-    while(r < 1000) {
+    while(r < 20000 && dotProduct(dJ,dJ,4)>175000) {
         dJCalc(torque,torqueLimits);
         for(short j = 0; j < 4; j++) {
             torque[j] -= rate*dJ[j];
@@ -141,9 +143,11 @@ int main() {
     // Calculate the elapsed time in seconds
     elapsedTime = (double)(end.QuadPart - start.QuadPart) / frequency.QuadPart;
 
-    printf("Elapsed time: %f seconds\n", elapsedTime);
-    printf("Magnitude: %f\n",dotProduct(dJ,dJ,4));
-    printf("Cost: %f\nIterations:%i\n",JCalc(torque),r);
+    printf("Elapsed time: %f seconds\n\n", elapsedTime);
+    printf("Intial Cost: %f\n",JCalc(torque_initial));
+    printf("Magn: %f\n",dotProduct(dJ,dJ,4));
+    // printf("Magnitude: %f\n",dotProduct(dJ,dJ,4));
+    printf("Final Cost: %f\nIterations:%i\n",JCalc(torque),r);
     printf("Torques: %f,%f,%f,%f\n",torque[0],torque[1],torque[2],torque[3]);
 
     return 0;
