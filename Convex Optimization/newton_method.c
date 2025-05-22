@@ -2,7 +2,7 @@
 #include<math.h>
 #include<windows.h>
 #define R_W 1
-#define L_F 1
+#define L_F 1.7
 #define L_S 1
 #define N 4
 
@@ -18,6 +18,7 @@ double dBarrier[4]; // barrier gradient
 const double t = 16;
 double newtonStep[4];
 const double correctionFactor = 1;
+const double minDiff = 10; // minimum torque for back wheels with diff
 // convention: 0 -> FL,1 -> FR, 2 -> RL, 3 -> RR
 // convex surface can be represented as u^TAu+2Bu+c, c can be ignored
 // barrier terms allow the solution to remain in the allowable region
@@ -91,7 +92,6 @@ void dbarrierCalc(double * u , double * torqueLimit){
     const double frontLimit = 15*13.5;
     const double rearLimit = 230*3.23;
     const double bias_ratio = 4;
-    const double minDiff = 10;
     double frontLeftConstraint,frontRightConstraint; 
     if(torqueLimit[0]<frontLimit){
         frontLeftConstraint = torqueLimit[0];
@@ -142,7 +142,6 @@ void d2JCalc(double * u,double * torqueLimit) {
     const double frontLimit = 15*13.5;
     const double rearLimit = 230*3.23;
     const double bias_ratio = 4;
-    const double minDiff = 10;  
     double frontLeftConstraint,frontRightConstraint; 
     if(torqueLimit[0]<frontLimit){
         frontLeftConstraint = torqueLimit[0];
@@ -288,36 +287,119 @@ int main() {
 
     // Get the starting time
     QueryPerformanceCounter(&start);
-    double normal[4] = {350/4,350/4,350/4,350/4};
+    double normal[4] = {350*0.35,350*0.15,350*0.35,350*0.15};
     double steering_angle = 3.14/6;
     initialize(steering_angle,normal);
-    double total_torque = 847;
-    constCalc(total_torque,3);
+    double total_torque = 647;
+    constCalc(total_torque,0.3);
     double longVel = 30;
     double wheelBase = 3;
     double K_U = 0.025; 
-	double yaw_ref = longVel/(wheelBase*(1+K_U*longVel*longVel))*steering_angle;
-    double correctionTorqueF = 50*yaw_ref*R_W/2.0/1.6;
+	// double yaw_ref = longVel/(wheelBase*(1+K_U*longVel*longVel))*steering_angle;
+    // double correctionTorqueF = 50*yaw_ref*R_W/2.0/1.6;
 
 
-    double torqueLimits[] = {100,-100,100,-100,100,100};
-    double torque[4] = {total_torque/4,total_torque/4,total_torque/4,total_torque/4};
-    double torque_initial[4]= {total_torque/4,total_torque/4,total_torque/4,total_torque/4}; 
-    double rate = 0.0000001;
+    double torqueLimits[] = {200,-150,200,-150,150,150};
+    double epsilon = 1;
+    double torque[4] = {torqueLimits[0]-epsilon,torqueLimits[2]-epsilon,torqueLimits[4]-epsilon,torqueLimits[5]-epsilon};
+    // double torque_initial[4]= {total_torque/4,total_torque/4,total_torque/4,total_torque/4}; 
     int r = 0;
-    printf("Initial Torques: %f,%f,%f,%f\n",torque[0],torque[1],torque[2],torque[3]);
-    double initialJ = JCalc(torque_initial,torqueLimits);
+    // printf("Initial Torques: %f,%f,%f,%f\n",torque[0],torque[1],torque[2],torque[3]);
+    double initialJ = JCalc(torque,torqueLimits);
     dJCalc(torque,torqueLimits);
     // printf("Magn: %f\n",dotProduct(dJ,dJ,4));
-    printf("dJ: %f,%f,%f,%f\n",dJ[0],dJ[1],dJ[2],dJ[3]);
-    double step = 1.0;  // Start with a larger step
+    // printf("dJ: %f,%f,%f,%f\n",dJ[0],dJ[1],dJ[2],dJ[3]);
+    double step = 0.0000005;  // Start with a larger step
     double beta = 0.5;  // Same as in Newton's method
     double alpha = 0.0001;  // Line search parameter
     double currentCost = JCalc(torque, torqueLimits);
     double tempTorque[4];
 
     dJCalc(torque, torqueLimits);
-    while(r < 10000 && dotProduct(dJ, dJ, 4) > 30000) {
+   
+    /* while(r < 10000 && dotProduct(dJ,dJ,4)>30000) {
+        dJCalc(torque,torqueLimits);
+        for(short j = 0; j < 4; j++) {
+            torque[j] -= step*dJ[j];
+        }
+        r += 1;
+    } */
+    /* QueryPerformanceCounter(&end);
+
+    //Calculate the elapsed time in seconds
+    elapsedTime = (double)(end.QuadPart - start.QuadPart) / frequency.QuadPart;
+
+    printf("Medium Elapsed time: %lf seconds\n\n", elapsedTime);
+    printf("Intial Cost: %f\n",initialJ);
+    printf("Magn: %f\n",dotProduct(dJ,dJ,4));
+    printf("Magnitude: %f\n",dotProduct(dJ,dJ,4));
+    printf("Torques: %f,%f,%f,%f\n",torque[0],torque[1],torque[2],torque[3]); */
+
+    ;
+    
+    d2JCalc(torque,torqueLimits);
+    dJCalc(torque,torqueLimits);
+    double tolerance = 100000;
+    double temp[4];
+    double lambda_squared = 0;
+    alpha = 0.1;
+    beta = 0.5;
+    step = 0.000001;
+    double initialCost=JCalc(torque,torqueLimits);
+    int iteration = 0;
+    double tempCost = initialCost;
+    int minBackIter = 1000;
+    int maxBackIter = 0;
+    float averageIter = 0;
+    while(solve_system(d2J,dJ,newtonStep) && iteration < 3500) {
+        lambda_squared = dotProduct(dJ,newtonStep,4);
+        if(lambda_squared/2 < tolerance) {
+            break;
+        }
+        step = 0.0005;
+        initialCost = tempCost;
+        
+        for(int i = 0; i < 4; i++) {
+            temp[i] = torque[i] - step*newtonStep[i];
+        }
+        double tempCost = JCalc(temp,torqueLimits);
+        int backIter = 1;
+        while( (tempCost > initialCost+alpha*step*lambda_squared) || isnan(tempCost)){
+            step = beta*step;
+            for(int i = 0; i < 4; i++) {
+                temp[i] = torque[i] - step*newtonStep[i];
+            }
+            tempCost = JCalc(temp,torqueLimits);
+            if(step<1e-100) {
+                printf("BROKEN\n");
+                break;
+            }
+            backIter++;
+        }
+        if(isnan(tempCost)){
+            printf("NAN\n");
+            break;
+        }
+        /* if(minBackIter > backIter) {
+           minBackIter = backIter; 
+        }
+        else if(maxBackIter < backIter) {
+            maxBackIter = backIter;
+        }
+        averageIter += backIter; */
+        for(int i = 0; i < 4; i++) {
+            torque[i] = temp[i];
+        }
+        
+        iteration += 1;
+    }
+    // averageIter /= iteration;
+    step = 0.001;  // Start with a larger step
+    beta = 0.5;  // Same as in Newton's method
+    alpha = 0.0001;  // Line search parameter
+    float averageIter2 = 0;
+    r = 0;
+     while(r < 5000 && dotProduct(dJ, dJ, 4) > 3000) {
         // Try step
         for(short j = 0; j < 4; j++) {
             tempTorque[j] = torque[j] - step * dJ[j];
@@ -326,7 +408,7 @@ int main() {
         // Check if cost decreases sufficiently
         double newCost = JCalc(tempTorque, torqueLimits);
         double gradDotDir = -dotProduct(dJ, dJ, 4);  // Dot product of gradient and -gradient
-        
+        int backIter = 1; 
         // Backtracking
         while(newCost > currentCost + alpha * step * gradDotDir || isnan(newCost)) {
             step *= beta;
@@ -334,9 +416,19 @@ int main() {
                 tempTorque[j] = torque[j] - step * dJ[j];
             }
             newCost = JCalc(tempTorque, torqueLimits);
-            if(step < 1e-10) break;  // Prevent infinite loop
+            if(step<1e-100) {
+                printf("BROKEN\n");
+                break;
+            }
+            backIter++;
         }
-        
+        /* if(minBackIter > backIter) {
+           minBackIter = backIter; 
+        }
+        else if(maxBackIter < backIter) {
+            maxBackIter = backIter;
+        }
+        averageIter2 += backIter; */ 
         // Update torques
         for(short j = 0; j < 4; j++) {
             torque[j] = tempTorque[j];
@@ -346,66 +438,7 @@ int main() {
         dJCalc(torque, torqueLimits);
         r += 1;
     }
-    // while(r < 1000 && dotProduct(dJ,dJ,4)>30000) {
-    //     dJCalc(torque,torqueLimits);
-    //     for(short j = 0; j < 4; j++) {
-    //         torque[j] -= rate*dJ[j];
-    //     }
-    //     r += 1;
-    // }
-    // QueryPerformanceCounter(&end);
-
-    // Calculate the elapsed time in seconds
-    // elapsedTime = (double)(end.QuadPart - start.QuadPart) / frequency.QuadPart;
-
-    // printf("Medium Elapsed time: %lf seconds\n\n", elapsedTime);
-    // printf("Intial Cost: %f\n",JCalc(torque_initial,torqueLimits));
-    // printf("Magn: %f\n",dotProduct(dJ,dJ,4));
-    // printf("Magnitude: %f\n",dotProduct(dJ,dJ,4));
-    // printf("Intermediate Cost: %f\nIterations:%i\n",JCalc(torque,torqueLimits),r);
-    // printf("Torques: %f,%f,%f,%f\n",torque[0],torque[1],torque[2],torque[3]);
-
-    // printf("Newtons's Method Started\n");
-    
-    d2JCalc(torque,torqueLimits);
-    dJCalc(torque,torqueLimits);
-    double tolerance = 10000;
-    double temp[4];
-    double lambda_squared = 0;
-    alpha = 0.01;
-    beta = 0.5;
-    step = 0.000001;
-    double initialCost=JCalc(torque,torqueLimits);
-    int iteration = 0;
-    double tempCost = initialCost;
-    while(solve_system(d2J,dJ,newtonStep) && iteration < 5000) {
-        lambda_squared = dotProduct(dJ,newtonStep,4);
-        if(lambda_squared/2 < tolerance) {
-            break;
-        }
-        step = 0.0001;
-        initialCost = tempCost;
-        for(int i = 0; i < 4; i++) {
-            temp[i] = torque[i] - step*newtonStep[i];
-        }
-        double tempCost = JCalc(temp,torqueLimits);
-        while( (tempCost > initialCost+alpha*step*lambda_squared) || isnan(tempCost)){
-            step = beta*step;
-            for(int i = 0; i < 4; i++) {
-                temp[i] = torque[i] - step*newtonStep[i];
-            }
-            tempCost = JCalc(temp,torqueLimits);
-            if(temp[2]<10) {
-                printf("BROKEN");
-            }
-        }
-        for(int i = 0; i < 4; i++) {
-            torque[i] = temp[i];
-        }
-        
-        iteration += 1;
-    }
-    
+    // averageIter2 /= r; 
     // printf("Torques: %f,%f,%f,%f\n",torque[0],torque[1],torque[2],torque[3]);
     
     QueryPerformanceCounter(&end);
@@ -413,8 +446,11 @@ int main() {
     printf("Total Elapsed time: %lf seconds\n\n", elapsedTime);
     printf("Lambda^2: %f\n", lambda_squared);
     printf("Intial Cost:%f\n",initialJ);
-    printf("Final Cost: %f\nIterations:%i\n",JCalc(torque,torqueLimits),iteration);
+    printf("Final Cost: %f\n Newton Iterations:%i\n",JCalc(torque,torqueLimits),iteration);
     printf("Torques: %f,%f,%f,%f\n",torque[0],torque[1],torque[2],torque[3]);
+    printf("Grad Iterations:%d\n",r);
+    // printf("Min/Max Backiterations: %d,%d\n",minBackIter,maxBackIter);
+    // printf("AverageIter:%f,%f\n",averageIter,averageIter2);
 
 
     return 0;
