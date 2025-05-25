@@ -273,16 +273,28 @@ void initialTorqueCorrection(double * torque, double * torqueLimits) {
     }
 }
 
+void computeYawMoment(double * torque,double steering_angle) {
+    double total_torque = torque[0]+torque[1]+torque[2]+torque[3];
+    double yaw_Moment = 0;
+    double leftWheelAngle = steering_angle;
+    double rightWheelAngle = steering_angle;
+    double B_v[4] = {(L_F*sin(leftWheelAngle)-halfWidth*cos(leftWheelAngle))/R_W,(L_F*sin(rightWheelAngle)+halfWidth*cos(rightWheelAngle))/R_W,-halfWidth/R_W,halfWidth/R_W};
+    for(int i = 0; i <4; i++) {
+        yaw_Moment += B_v[i]*torque[i];
+    }
+    printf("Total Torque:%f,Yaw Moment:%f\n",total_torque,yaw_Moment);
+}
+
 
 
 int main(int argc, char*argv[]) {
-    double steering_angle;  // angle of steering wheel
-    double yawMomentRequest; 
-    if(argc == 0) {
+    double steering_angle,yawMomentRequest,total_torque;
+    if(argc == 1) {
         steering_angle = 3.14/12;  // angle of steering wheel
-        yawMomentRequest = 1000; 
+        yawMomentRequest = 1000;
+        total_torque = 547;
     }
-    else if(argc == 3) {
+    else if(argc == 4) {
         for (int i = 1; i < argc; i++) {
             char *endptr;
             double val = strtod(argv[i], &endptr);
@@ -297,7 +309,10 @@ int main(int argc, char*argv[]) {
                     yawMomentRequest = val;
                 }
                 else if(i == 1) {
-                    steering_angle = val;
+                    steering_angle = val/180*3.141519;
+                }
+                else if(i == 3) {
+                    total_torque = val;
                 }
                 printf("Argument %d as double: %f\n", i, val);
             }
@@ -308,7 +323,7 @@ int main(int argc, char*argv[]) {
         }
     }
     else {
-        printf("Usage: %s  (Steering Angle) (Yaw Moment Request)\n",argv[0]);
+        printf("Usage: %s  (Steering Angle Degrees) (Yaw Moment Request Nm) (Total Torque Nm)\n",argv[0]);
         return 1;
     }
 
@@ -321,7 +336,7 @@ int main(int argc, char*argv[]) {
 
     
     double normalForce[4] = {350*0.25,350*0.25,350*0.25,350*0.25};
-    double total_torque = 547;
+    
     double torqueLimits[] = {200,-150,200,-150,150,150};
     initialize(steering_angle,normalForce,total_torque,yawMomentRequest);
     
@@ -493,19 +508,19 @@ int main(int argc, char*argv[]) {
         iteration += 1;
     }
     end = clock();
-    averageIter /= iteration;
+    if(iteration != 0){ averageIter /= iteration;}
     
     elapsedTime = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("Steering Angle %f,Yaw Request:%f\n",steering_angle,yawMomentRequest);
+    printf("Steering Angle %f,Yaw Request:%f, Total Torque:%f\n",steering_angle,yawMomentRequest,total_torque);
     printf("Torques: %f,%f,%f,%f\n",torque_initial[0],torque_initial[1],torque_initial[2],torque_initial[3]);
     printf("dJ: %f,%f,%f,%f\n",dJ[0],dJ[1],dJ[2],dJ[3]);
     printf("Total Elapsed time: %lf seconds\n\n", elapsedTime);
     printf("Initial Cost: %f\n",JCost);
-    printf("Torques: %f,%f,%f,%f\n",torque[0],torque[1],torque[2],torque[3]);
     printf("Newton Iterations:%d\n",nIteration);
     printf("Grad Iterations:%d\n",iteration);
     printf("AverageIter:%d\n",averageIter);
     printf("Final Cost: %f\n",newCost);
-
+    printf("Torques: %f,%f,%f,%f\n",torque[0],torque[1],torque[2],torque[3]);
+    computeYawMoment(torque,steering_angle);
     return 0;
 }
