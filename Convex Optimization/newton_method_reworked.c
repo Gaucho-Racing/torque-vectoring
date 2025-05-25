@@ -17,7 +17,7 @@ double W_v[2][2] = {{70,0},{0,100}}; // should always be [W1 0; 0 W2]
 
 // motor and diff limits
 const double frontLimit = 15*13.5; // front motor
-const double rearLimit = 130*3.23; // rear motor
+const double rearLimit = 230*3.23; // rear motor
 const double minDiff = 1;
 const double bias_ratio = 4; // ratio of more traction wheel to less traction wheel torque
 
@@ -337,7 +337,7 @@ int main(int argc, char*argv[]) {
     
     double normalForce[4] = {350*0.25,350*0.25,350*0.25,350*0.25};
     
-    double torqueLimits[] = {200,-150,200,-150,150,150};
+    double torqueLimits[] = {250,-250,250,-250,250,250};
     initialize(steering_angle,normalForce,total_torque,yawMomentRequest);
     
     // torqueLimits
