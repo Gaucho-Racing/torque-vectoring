@@ -1,6 +1,7 @@
 #include<stdio.h>
+#include<stdlib.h>
 #include<math.h>
-#include<windows.h>
+#include<time.h>
 #define R_W 0.33
 #define L_F 3
 #define N 4
@@ -11,7 +12,7 @@ double A[4][4];  // quadatric term
 double B[4]; // linear term
 double C; // const term
 double dBarrier[4]; // barrier gradient 
-double W_v[2][2] = {{1000,0},{0,1000}}; // should always be [W1 0; 0 W2]
+double W_v[2][2] = {{70,0},{0,100}}; // should always be [W1 0; 0 W2]
 
 
 // motor and diff limits
@@ -21,7 +22,7 @@ const double minDiff = 1;
 const double bias_ratio = 4; // ratio of more traction wheel to less traction wheel torque
 
 // barrier function
-const double t = 16; // strength of barrier
+const double t = 0.000001; // strength of barrier
 
 // dotProduct
 double dotProduct(double * a, double * b, int size) {
@@ -240,27 +241,9 @@ short solve_system(double A[N][N], double b[N], double x[N]) {
     return 1;
 }
 
-void intialTorqueCorrection(double * torque, double * torqueLimits) {
-    const int indArray[4] = {0,2,4,5};
-    const epsilon = 10;
-    for(int i = 0; i < 4; i++) {
-        if(torque[i]>torqueLimits[indArray[i]]) {
-            torque[i] = torqueLimits[indArray[i]]-epsilon;
-        }
-    }
-    
-    if(torque[0]<torqueLimits[1]) {
-        torque[0] = torqueLimits[1]+epsilon;
-    }
-    
-    if(torque[1]<torqueLimits[3]) {
-        torque[1]=torqueLimits[3]+epsilon;
-    }
-}
-
 void initialTorqueCorrection(double * torque, double * torqueLimits) {
-    const int indArray[] = {0,2,4,5};
-    const epsilon = 10;
+    const int indArray[4] = {0,2,4,5};
+    const double epsilon = 10;
     for(int i = 0; i < 4; i++) {
         if(torque[i]>torqueLimits[indArray[i]]) {
             torque[i] = torqueLimits[indArray[i]]-epsilon;
@@ -274,21 +257,69 @@ void initialTorqueCorrection(double * torque, double * torqueLimits) {
     if(torque[1]<torqueLimits[3]) {
         torque[1]=torqueLimits[3]+epsilon;
     }
+
+    if(torque[2]<minDiff) {
+        torque[2] = minDiff+epsilon;
+    }
+    if(torque[3]<minDiff) {
+        torque[3] = minDiff+epsilon;
+    }
+
+    if(-4*torque[2]+torque[3]>-1) {
+        torque[2] = torque[3]/4+epsilon;
+    }
+    else if(torque[2]-4*torque[3]) {
+        torque[3] = torque[2]/4+epsilon;
+    }
 }
 
-int main() {
-    LARGE_INTEGER frequency;
-    LARGE_INTEGER start, end;
-    // Get the frequency of the high-resolution performance counter
-    QueryPerformanceFrequency(&frequency);
-   
-    // Get the starting time
-    QueryPerformanceCounter(&start);
-    
+
+
+int main(int argc, char*argv[]) {
+    double steering_angle;  // angle of steering wheel
+    double yawMomentRequest; 
+    if(argc == 0) {
+        steering_angle = 3.14/12;  // angle of steering wheel
+        yawMomentRequest = 1000; 
+    }
+    else if(argc == 3) {
+        for (int i = 1; i < argc; i++) {
+            char *endptr;
+            double val = strtod(argv[i], &endptr);
+            int unsafe = 0;
+            if (*endptr != '\0') {
+                // Not a valid double
+                unsafe = 1;
+                printf("Invalid number: %s\n", argv[i]);
+            } 
+            else {
+                if(i == 2) {
+                    yawMomentRequest = val;
+                }
+                else if(i == 1) {
+                    steering_angle = val;
+                }
+                printf("Argument %d as double: %f\n", i, val);
+            }
+            if(unsafe) {
+                return 1;
+            }
+            
+        }
+    }
+    else {
+        printf("Usage: %s  (Steering Angle) (Yaw Moment Request)\n",argv[0]);
+        return 1;
+    }
+
+
+    clock_t start,end;
     // initalization of constants
     double elapsedTime;  
-    double steering_angle = 3.14/12;  // angle of steering wheel
-    double yawMomentRequest = -500; 
+    
+    start = clock();
+
+    
     double normalForce[4] = {350*0.25,350*0.25,350*0.25,350*0.25};
     double total_torque = 547;
     double torqueLimits[] = {200,-150,200,-150,150,150};
@@ -297,8 +328,8 @@ int main() {
     // torqueLimits
     unsigned int iteration = 0;
     torqueLimitCorrection(torqueLimits);
-    double correctionTorqueF = yawMomentRequest*R_W/2.0/halfWidth;
-    double torque[4] = {total_torque/4-correctionTorqueF,total_torque/4+correctionTorqueF,total_torque/4,total_torque/4};
+    double correctionTorqueF = yawMomentRequest*R_W/4.0/halfWidth;
+    double torque[4] = {total_torque/4-correctionTorqueF,total_torque/4+correctionTorqueF,total_torque/4-correctionTorqueF,total_torque/4+correctionTorqueF};
     initialTorqueCorrection(torque,torqueLimits);
     double torque_initial[4] = {torque[0],torque[1],torque[2],torque[3]};
     // Gradient Descent 
@@ -314,58 +345,64 @@ int main() {
     int broke = 0;
     int averageIter = 0;
     // Gradient Method
+    
+    iteration = 0;
+    // while(iteration < 10000) {
+    //     dJCalc(torque,torqueLimits);
+    //     double gradDotDir = dotProduct(dJ,dJ,4);
+    //     if(gradDotDir < 30000) {
+    //         break;
+    //     }
+    //     step = 0.000000000001;
+    //     for(short j = 0; j < 4; j++) {
+    //         nextTorque[j] = torque[j]-step*dJ[j];
+    //     }
+    //     newCost = JCalc(nextTorque, torqueLimits);
+        
+    //     // Backtracking
+    //     while(isnan(newCost) || newCost > currentCost + alpha * step * gradDotDir ) {
+    //         step *= beta;
+    //         for(short j = 0; j < 4; j++) {
+    //             nextTorque[j] = torque[j] - step * dJ[j];
+    //         }
+    //         newCost = JCalc(nextTorque, torqueLimits);
+    //         if(step<1e-100) {
+    //             broke = 1;
+    //             printf("BROKEN\n");
+    //             break;
+    //         }
+    //         averageIter++;
+    //     }
+    //     if(broke) {
+    //         break;
+    //     }
+    //     if(-4*nextTorque[2]+nextTorque[3]>-1) {
+    //             printf("BROKEN\n");
+    //             break;
+    //     }
+    //     currentCost = newCost;
+        
+    //     for(short j = 0; j < 4;j ++) {
+    //         torque[j] = nextTorque[j];
+    //     }
+
+    //     iteration += 1;
+    // }
+    // averageIter /= iteration;
+    
+    // Newton Method
     double newtonStep[4];
     double lambda_squared;
     double tolerance =10000;
     iteration = 0;
-    while(iteration < 20000) {
-        dJCalc(torque,torqueLimits);
-        double gradDotDir = dotProduct(dJ,dJ,4);
-        if(gradDotDir < 30000) {
-            break;
-        }
-        step = 0.0000000000001;
-        for(short j = 0; j < 4; j++) {
-            nextTorque[j] = torque[j]-step*dJ[j];
-        }
-        newCost = JCalc(nextTorque, torqueLimits);
-        
-        // Backtracking
-        while(isnan(newCost) || newCost > currentCost + alpha * step * gradDotDir ) {
-            step *= beta;
-            for(short j = 0; j < 4; j++) {
-                nextTorque[j] = torque[j] - step * dJ[j];
-            }
-            newCost = JCalc(nextTorque, torqueLimits);
-            if(step<1e-100) {
-                broke = 1;
-                printf("BROKEN\n");
-                break;
-            }
-            averageIter++;
-        }
-        if(broke) {
-            break;
-        }
-        currentCost = newCost;
-        
-        for(short j = 0; j < 4;j ++) {
-            torque[j] = nextTorque[j];
-        }
-
-        iteration += 1;
-    }
-    averageIter /= iteration;
-    
-    // Newton Method
-    iteration = 0;
+    newCost = initalCost;
     dJd2JCalc(torque,torqueLimits);
-    while(iteration < 5000 && solve_system(d2J,dJ,newtonStep)) {
+    while(iteration < 12000 && solve_system(d2J,dJ,newtonStep)) {
         lambda_squared = dotProduct(dJ,newtonStep,4);
         if(lambda_squared/2 < tolerance) {
             break;
         }
-        step = 0.001;
+        step = 0.0001;
         currentCost = newCost;
         
         for(int i = 0; i < 4; i++) {
@@ -382,6 +419,11 @@ int main() {
             }
             newCost = JCalc(nextTorque,torqueLimits);
             if(step<1e-100) {
+                printf("BROKEN\n");
+                broken = 1;
+                break;
+            }
+            if(-4*nextTorque[3]+nextTorque[2]>-30) {
                 printf("BROKEN\n");
                 broken = 1;
                 break;
@@ -406,15 +448,16 @@ int main() {
         dJd2JCalc(torque,torqueLimits);
         iteration += 1;
     }
+    int nIteration = iteration;
     
     iteration = 0;
-    while(iteration < 1500) {
+    while(iteration < 7000) {
         dJCalc(torque,torqueLimits);
         double gradDotDir = dotProduct(dJ,dJ,4);
-        if(gradDotDir < 5000) {
+        if(gradDotDir < 500) {
             break;
         }
-        step = 0.000001;
+        step = 0.00000001;
         for(short j = 0; j < 4; j++) {
             nextTorque[j] = torque[j]-step*dJ[j];
         }
@@ -429,36 +472,40 @@ int main() {
             newCost = JCalc(nextTorque, torqueLimits);
             if(step<1e-100) {
                 broke = 1;
-                printf("BROKEN\n");
+                printf("BROKENG\n");
                 break;
-            }
+            } 
             averageIter++;
+        }
+        if(-4*nextTorque[3]+nextTorque[2]>-1) {
+                printf("BROKENG\n");
+                broke = 1;
+                break;
         }
         if(broke) {
             break;
         }
         currentCost = newCost;
-        
         for(short j = 0; j < 4;j ++) {
             torque[j] = nextTorque[j];
         }
 
         iteration += 1;
     }
+    end = clock();
     averageIter /= iteration;
     
-    
-    QueryPerformanceCounter(&end);
-    elapsedTime = (double)(end.QuadPart - start.QuadPart) / frequency.QuadPart;
+    elapsedTime = ((double) (end - start)) / CLOCKS_PER_SEC;
     printf("Steering Angle %f,Yaw Request:%f\n",steering_angle,yawMomentRequest);
     printf("Torques: %f,%f,%f,%f\n",torque_initial[0],torque_initial[1],torque_initial[2],torque_initial[3]);
-    elapsedTime = (double)(end.QuadPart - start.QuadPart) / frequency.QuadPart;
+    printf("dJ: %f,%f,%f,%f\n",dJ[0],dJ[1],dJ[2],dJ[3]);
     printf("Total Elapsed time: %lf seconds\n\n", elapsedTime);
-    printf("InitialCost: %f\n",JCost);
+    printf("Initial Cost: %f\n",JCost);
     printf("Torques: %f,%f,%f,%f\n",torque[0],torque[1],torque[2],torque[3]);
+    printf("Newton Iterations:%d\n",nIteration);
     printf("Grad Iterations:%d\n",iteration);
     printf("AverageIter:%d\n",averageIter);
-    printf("Cost: %f\n",newCost);
+    printf("Final Cost: %f\n",newCost);
 
     return 0;
 }
