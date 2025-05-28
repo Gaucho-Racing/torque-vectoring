@@ -22,7 +22,7 @@ const double minDiff = 1;
 const double bias_ratio = 4; // ratio of more traction wheel to less traction wheel torque
 
 // barrier function
-const double t = 0.001; // strength of barrier
+const double t = 0.0001; // strength of barrier
 			 
 
 // dotProduct
@@ -352,7 +352,7 @@ int main(int argc, char*argv[]) {
     initialTorqueCorrection(torque,torqueLimits);
     double torque_initial[4] = {torque[0],torque[1],torque[2],torque[3]};
     // Gradient Descent 
-    double step = 0.0005; // Step size
+    double step = 0.0001; // Step size
     double beta = 0.05;
     double alpha = 0.2;
     double nextTorque[4];
@@ -419,7 +419,6 @@ int main(int argc, char*argv[]) {
         iteration += 1;
     }
     int nIteration = iteration;
-    beta = 0.05;
     iteration = 0;
     broke = 0;
     while(iteration < 10000) {
@@ -449,7 +448,7 @@ int main(int argc, char*argv[]) {
             totalIter++;
             averageIter++;
         }
-        if(-4*nextTorque[3]+nextTorque[2]>-1) {
+        if(-4*nextTorque[3]+nextTorque[2]>-0.0000000001 || -4*nextTorque[2]+nextTorque[3]>-0.0000000001) {
                 printf("BROKEN_Barrier\n");
                 broke = 1;
                 break;
@@ -469,17 +468,17 @@ int main(int argc, char*argv[]) {
       
     elapsedTime = ((double) (end - start)) / CLOCKS_PER_SEC;
     // printf("Steering Angle %f,Yaw Request:%f, Total Torque:%f\n",steering_angle,yawMomentRequest,total_torque);
-    printf("Torques: %f,%f,%f,%f\n",torque_initial[0],torque_initial[1],torque_initial[2],torque_initial[3]);
+    // printf("Torques: %f,%f,%f,%f\n",torque_initial[0],torque_initial[1],torque_initial[2],torque_initial[3]);
     // printf("dJ: %f,%f,%f,%f\n",dJ[0],dJ[1],dJ[2],dJ[3]);
     // printf("Total Elapsed time: %lf seconds\n\n", elapsedTime);
-    printf("Initial Cost: %f\n",JCost);
-    printf("Newton Iterations:%d\n",nIteration);
-    printf("Grad Iterations:%d\n",iteration);
+    // printf("Initial Cost: %f\n",JCost);
+    // printf("Newton Iterations:%d\n",nIteration);
+    // printf("Grad Iterations:%d\n",iteration);
     // printf("AverageIter:%d\n",averageIter);
-    printf("Final Cost: %f\n",newCost);
+    // printf("Final Cost: %f\n",newCost);
     // printf("Torques: %f,%f,%f,%f\n",torque[0],torque[1],torque[2],torque[3]);
-    computeYawMoment(torque,steering_angle);
+    // computeYawMoment(torque,steering_angle);
     printf("%f\n",elapsedTime);
-    printf("Total Iterations: %d\n",totalIter);
+    // printf("Total Iterations: %d\n",totalIter);
     return 0;
 }
