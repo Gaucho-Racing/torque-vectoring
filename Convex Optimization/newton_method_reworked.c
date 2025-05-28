@@ -22,7 +22,7 @@ const double minDiff = 1;
 const double bias_ratio = 4; // ratio of more traction wheel to less traction wheel torque
 
 // barrier function
-const double t = 0.0000001; // strength of barrier
+const double t = 0.001; // strength of barrier
 			 
 
 // dotProduct
@@ -81,7 +81,7 @@ void initialize(double steering_angle, double normal_force[4],double total_torqu
     return;
 }
 
-void dJCalc(double * u, double * torqueLimit) {
+void dJCalc(double u[4], double * torqueLimit) {
     double dBarrier[4];
     double f1 = (u[0]-torqueLimit[0]);
     double f2 = (-u[0]+torqueLimit[1]);
@@ -106,7 +106,7 @@ void dJCalc(double * u, double * torqueLimit) {
     }
 }
 
-void dJd2JCalc(double * u, double * torqueLimit) {
+void dJd2JCalc(double u[4], double * torqueLimit) {
     double dBarrier[4];
     double f1 = (u[0]-torqueLimit[0]);
     double f2 = (-u[0]+torqueLimit[1]);
@@ -138,7 +138,7 @@ void dJd2JCalc(double * u, double * torqueLimit) {
     d2J[3][2] = d2J[2][3];
 }
 
-double JCalc(double * u,double *torqueLimit) {
+double JCalc(double u[4],double *torqueLimit) {
     double temp[4];
     for(int i = 0; i < 4; i++) {
         temp[i] = dotProduct(A[i],u,4); 
@@ -242,34 +242,34 @@ short solve_system(double A[N][N], double b[N], double x[N]) {
     return 1;
 }
 
-void initialTorqueCorrection(double * torque, double * torqueLimits) {
+void initialTorqueCorrection(double torque[4], double torqueLimits[6]) {
     const int indArray[4] = {0,2,4,5};
-    const double epsilon = 10;
+    const double epsilon = 1;
     for(int i = 0; i < 4; i++) {
-        if(torque[i]>torqueLimits[indArray[i]]) {
+        if(torque[i]-torqueLimits[indArray[i]]>-epsilon) {
             torque[i] = torqueLimits[indArray[i]]-epsilon;
         }
     }
     
-    if(torque[0]<torqueLimits[1]) {
+    if(torque[0]-torqueLimits[1]<epsilon) {
         torque[0] = torqueLimits[1]+epsilon;
     }
     
-    if(torque[1]<torqueLimits[3]) {
+    if(torque[1]-torqueLimits[3]<epsilon) {
         torque[1]=torqueLimits[3]+epsilon;
     }
 
-    if(torque[2]<minDiff) {
+    if(torque[2]-minDiff<epsilon) {
         torque[2] = minDiff+epsilon;
     }
-    if(torque[3]<minDiff) {
+    if(torque[3]-minDiff<epsilon) {
         torque[3] = minDiff+epsilon;
     }
 
-    if(-4*torque[2]+torque[3]>-1) {
+    if(-4*torque[2]+torque[3]>-epsilon) {
         torque[2] = torque[3]/4+epsilon;
     }
-    else if(torque[2]-4*torque[3]>-1) {
+    else if(torque[2]-4*torque[3]>-epsilon) {
         torque[3] = torque[2]/4+epsilon;
     }
 }
@@ -291,9 +291,9 @@ void computeYawMoment(double * torque,double steering_angle) {
 int main(int argc, char*argv[]) {
     double steering_angle,yawMomentRequest,total_torque;
     if(argc == 1) {
-        steering_angle = 3.14/12;  // angle of steering wheel
-        yawMomentRequest = 1000;
-        total_torque = 547;
+        steering_angle = 23*3.14/180;  // angle of steering wheel
+        yawMomentRequest = -500;
+        total_torque = 480;
     }
     else if(argc == 4) {
         for (int i = 1; i < argc; i++) {
@@ -332,7 +332,7 @@ int main(int argc, char*argv[]) {
     clock_t start,end;
     // initalization of constants
     double elapsedTime;  
-    
+    unsigned int totalIter = 0;
     start = clock();
 
     
@@ -398,6 +398,7 @@ int main(int argc, char*argv[]) {
                 break;
             }
             backIter++;
+            totalIter++;
         }
         if(broken ) {
             break;
@@ -445,10 +446,11 @@ int main(int argc, char*argv[]) {
                 printf("BROKENG\n");
                 break;
             } 
+            totalIter++;
             averageIter++;
         }
         if(-4*nextTorque[3]+nextTorque[2]>-1) {
-                printf("BROKENG\n");
+                printf("BROKEN_Barrier\n");
                 broke = 1;
                 break;
         }
@@ -467,16 +469,17 @@ int main(int argc, char*argv[]) {
       
     elapsedTime = ((double) (end - start)) / CLOCKS_PER_SEC;
     // printf("Steering Angle %f,Yaw Request:%f, Total Torque:%f\n",steering_angle,yawMomentRequest,total_torque);
-    // printf("Torques: %f,%f,%f,%f\n",torque_initial[0],torque_initial[1],torque_initial[2],torque_initial[3]);
+    printf("Torques: %f,%f,%f,%f\n",torque_initial[0],torque_initial[1],torque_initial[2],torque_initial[3]);
     // printf("dJ: %f,%f,%f,%f\n",dJ[0],dJ[1],dJ[2],dJ[3]);
     // printf("Total Elapsed time: %lf seconds\n\n", elapsedTime);
-    // printf("Initial Cost: %f\n",JCost);
-    // printf("Newton Iterations:%d\n",nIteration);
-    // printf("Grad Iterations:%d\n",iteration);
+    printf("Initial Cost: %f\n",JCost);
+    printf("Newton Iterations:%d\n",nIteration);
+    printf("Grad Iterations:%d\n",iteration);
     // printf("AverageIter:%d\n",averageIter);
-    // printf("Final Cost: %f\n",newCost);
+    printf("Final Cost: %f\n",newCost);
     // printf("Torques: %f,%f,%f,%f\n",torque[0],torque[1],torque[2],torque[3]);
-    // computeYawMoment(torque,steering_angle);
+    computeYawMoment(torque,steering_angle);
     printf("%f\n",elapsedTime);
+    printf("Total Iterations: %d\n",totalIter);
     return 0;
 }
