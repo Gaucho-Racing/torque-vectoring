@@ -2,10 +2,10 @@
 
 # Configuration
 program="./NewtonReworked"   # Change this to your executable
-runs=20                    # Number of times to run
+runs=200                    # Number of times to run
 total=0
 max=0.
-min=10000.
+min=10000000000000000000000000.
 iter=0
 yawMoment=0
 totalTorque=0
@@ -13,7 +13,7 @@ steeringAngle=0
 bad=0
 echo "Running $program $runs times..."
 for((k = -400; k <= 800; k += 20)) do
-	for ((j = -30; j <= 30; j += 1)); do
+	for ((j = -30; j <= 30; j += 2)); do
 		for ((i = -500 ; i <= 500; i+=20)); do
 		    program="./NewtonReworked $j $i $k"
 		    output=$($program)
